@@ -76,6 +76,15 @@ int main(void)
      printf("%s\n", chunk.memory);
  
     printf("%lu bytes retrieved\n", (long)chunk.size);
+
+    //Write to output file
+    FILE *f = fopen("testoutput.txt", "w");
+    if ( f == NULL){
+      printf("you don' goofed\n");
+      return 1;
+    }
+    fwrite(chunk.memory, sizeof(char), chunk.size, f);
+    fclose(f);
   }
  
   /* cleanup curl stuff */ 

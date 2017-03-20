@@ -13,6 +13,7 @@
 #include <cstring> 		// strerror
 #include <cerrno> 		// errno
 #include <cstdlib>		// exit
+#include <sstream>
 
 class Config{
 
@@ -63,13 +64,19 @@ Config::Config(std::string filename){
 		value = line.substr(delim_pos+1, line.length());
 
 		if(param == "PERIOD_FETCH"){
-			period_fetch = std::stoi(value);
+			//period_fetch = std::stoi(value);
+			std::stringstream convert(value);
+			convert>>period_fetch;
 		}
 		else if(param == "NUM_FETCH"){
-			num_fetch = std::stoi(value);
+			//num_fetch = std::stoi(value);
+			std::stringstream convert(value);
+			convert>>num_fetch;
 		}
 		else if(param == "NUM_PARSE"){
-			num_parse = std::stoi(value);
+			//num_parse = std::stoi(value);
+			std::stringstream convert(value);
+			convert>>num_parse;
 		}
 		else if(param == "SEARCH_FILE"){
 			search_file = value;
