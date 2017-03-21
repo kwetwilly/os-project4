@@ -20,10 +20,8 @@ void process_search(std::vector<std::string> &, std::string);
 void process_site(std::vector<std::string> &, std::string);
 void usage();
 
-void findTerms( std::string html, std::vector<std::string> searchVect);
+std::vector<int> findTerms( std::string html, std::vector<std::string> searchVect);
 
-////////////////////////////////////
-//GETINMEMOORY//
 
 struct MemoryStruct {
   char *memory;
@@ -31,8 +29,7 @@ struct MemoryStruct {
 };
  
 static size_t
-WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp){
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
  
@@ -95,21 +92,7 @@ std::string getinmemory_main( std::string url )
 
 	std::string output = chunk.memory;
 	return output;
-/*
-    //Write to output file
-	int front_pos = url.find("//");
-	int end_pos = url.find("/", front_pos + 2);
-	std::string filename = url.substr( front_pos + 2, end_pos - front_pos - 2);
-	const char * myfilename = filename.c_str();
 
-    FILE *f = fopen( myfilename, "w");
-    if ( f == NULL){
-      printf("you don' goofed\n");
-      return 1;
-    }
-    fwrite(chunk.memory, sizeof(char), chunk.size, f);
-    fclose(f);
-  */
   }
  
   /* cleanup curl stuff */ 
@@ -143,16 +126,36 @@ int main(int argc, char *argv[]){
 
 	std::vector<std::string> searchVect;
 	std::vector<std::string> siteVect;
+	std::vector<int> currentCount;
+	std::vector<std::vector<int> > allCounts;
 
 	// process the search and site files by populating vectors, respectively
 	process_search(searchVect, config_file.get_search_file());
 	process_site(siteVect, config_file.get_site_file());
 
-	//Get site html
-	for( int i = 0; i < siteVect.size(); i++){
+	//Loop through all sites
+	for( size_t i = 0; i < siteVect.size(); i++){
+		//Get html
 		std::string html = getinmemory_main(siteVect[i]);
-		findTerms(html, searchVect);
+		//std::cout << html << std::endl;
+		//Find key terms
+		currentCount = findTerms(html, searchVect);
+		allCounts.push_back(currentCount);
 	}
+	//Save output to csv
+	//Iterate through 2d vector
+	std::ofstream myfile;
+	//myfile.open("test.csv");
+	for( size_t i; i < allCounts.size(); i++){
+		for( size_t j; j < allCounts[i].size(); j++){
+			std::cout << allCounts[i][j];
+			if(j < allCounts[i].size() - 1){
+				std::cout << ',';
+			}
+		}
+		std::cout << '\n';
+	}
+	//myfile.close();
 }
 
 void process_search(std::vector<std::string> &searchVect, std::string filename){
@@ -192,17 +195,26 @@ void usage(){
 }
 
 //Find shit
-void findTerms( std::string html, std::vector<std::string> searchVect){
-	size_t pos = 0;
-	size_t count = 0;
+std::vector<int> findTerms( std::string html, std::vector<std::string> searchVect){
+	
 	std::vector<int> counts;
-	std::string str(html);
 
-	for ( int i = 0; i < searchVect.size(); i++){
+	for ( size_t i = 0; i < searchVect.size(); i++){
+		size_t pos = 0;
+		size_t count = 0;
+		//std::cout << "searching for number " << i << ": " << searchVect[i] << std::endl;
 		while(pos != std::string::npos){
+			//std::cout << "pos: " << pos << std::endl;
 			pos = html.find(searchVect[i], pos);
-			if( pos != std::string::npos) count++;
+			if( pos != std::string::npos) {
+				count++;
+				pos++;
+			}
+			else continue;
 		}
 		counts.push_back(count);
+		//std::cout << searchVect[i] << ": " << count << std::endl;
 	}
+	//std::cout << "size of counts: " << counts.size() << std::endl;
+	return counts;
 }
