@@ -10,7 +10,8 @@
 #include <cstdlib>		// exit
 
 #include <vector>
-
+#include <string>
+#include <ctime>
 #include <cstdio>
 #include <cstring>
 #include <curl/curl.h>
@@ -124,38 +125,57 @@ int main(int argc, char *argv[]){
 	// create configuration class from file
 	Config config_file(argv[1]);
 
-	std::vector<std::string> searchVect;
-	std::vector<std::string> siteVect;
-	std::vector<int> currentCount;
-	std::vector<std::vector<int> > allCounts;
+	
 
-	// process the search and site files by populating vectors, respectively
-	process_search(searchVect, config_file.get_search_file());
-	process_site(siteVect, config_file.get_site_file());
+	size_t runCount = 1;
+	while(1){
+		std::vector<std::string> searchVect;
+		std::vector<std::string> siteVect;
+		std::vector<int> currentCount;
+		std::vector<std::vector<int> > allCounts;
 
-	//Loop through all sites
-	for( size_t i = 0; i < siteVect.size(); i++){
-		//Get html
-		std::string html = getinmemory_main(siteVect[i]);
-		//std::cout << html << std::endl;
-		//Find key terms
-		currentCount = findTerms(html, searchVect);
-		allCounts.push_back(currentCount);
-	}
-	//Save output to csv
-	//Iterate through 2d vector
-	std::ofstream myfile;
-	//myfile.open("test.csv");
-	for( size_t i; i < allCounts.size(); i++){
-		for( size_t j; j < allCounts[i].size(); j++){
-			std::cout << allCounts[i][j];
-			if(j < allCounts[i].size() - 1){
-				std::cout << ',';
-			}
+		// process the search and site files by populating vectors, respectively
+		process_search(searchVect, config_file.get_search_file());
+		process_site(siteVect, config_file.get_site_file());
+
+		//Loop through all sites
+		for( size_t i = 0; i < siteVect.size(); i++){
+			//Get html
+			std::string html = getinmemory_main(siteVect[i]);
+			//std::cout << html << std::endl;
+			//Find key terms
+			currentCount = findTerms(html, searchVect);
+			allCounts.push_back(currentCount);
 		}
-		std::cout << '\n';
+		//Save output to csv
+		std::ofstream myfile;
+		//Open file
+		myfile.open( std::to_string(runCount) + ".csv");
+		//Set headers
+		myfile << "Time,Phrase,Site,Count\n";
+		//Populate data
+		for( size_t i = 0; i < allCounts.size(); i++){
+			for( size_t j = 0; j < allCounts[i].size(); j++){
+				//Date
+				time_t timev;
+				time(&timev);
+				myfile << timev << ',';
+				//Phrase
+				myfile << searchVect[j] << ',';
+
+				//Site
+				myfile << siteVect[i] << ',';
+
+				//Count
+				myfile << allCounts[i][j] << '\n';
+			}
+			//myfile << '\n';
+		}
+		myfile.close();
+		runCount++;
+		std::cout << "runCount: " << runCount << std::endl;
+		sleep(10);
 	}
-	//myfile.close();
 }
 
 void process_search(std::vector<std::string> &searchVect, std::string filename){
