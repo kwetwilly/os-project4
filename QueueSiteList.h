@@ -42,16 +42,20 @@ void QueueSiteList::push(std::string s){
 
 std::string QueueSiteList::pop(){
 
-	// lock before pop and wait on queue if it's empty
-	std::unique_lock<std::mutex> lck(mtx);
-	while(sites_queue.empty()) cv.wait(lck);
-	std::string s = sites_queue.front();
-	sites_queue.pop();
+	if(!sites_queue.empty()){
+		// lock before pop and wait on queue if it's empty
+		std::unique_lock<std::mutex> lck(mtx);
+		// while(sites_queue.empty()) cv.wait(lck);
+		std::string s = sites_queue.front();
+		sites_queue.pop();
 
-	if(sites_queue.empty()){
-		empty = true;
+		if(sites_queue.empty()){
+			empty = true;
+		}
+
+		return s;
 	}
 
-	return s;
+	return "";
 
 }

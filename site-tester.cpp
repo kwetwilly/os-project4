@@ -126,6 +126,7 @@ int main(int argc, char *argv[]){
 			for(int i = 0; i < config_file.get_num_parse(); i++){
 				consumers[i].join();
 			}
+
 		}
 
 		std::cout << "-------------" << std::endl;
@@ -198,6 +199,11 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
  
 std::string getinmemory_main( std::string url ){
+
+	// if the sites_queue is empty and there is a thread waiting, give the thread and empty string
+	if(url == ""){
+		return "";
+	}
 
 	CURL *curl_handle;
 	CURLcode res;
