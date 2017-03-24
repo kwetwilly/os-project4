@@ -24,12 +24,17 @@ private:
 	std::mutex mtx;
 	std::condition_variable cv;
 
+	bool empty = true;
+
 };
 
 void QueueSiteList::push(std::string s){
 
 	std::unique_lock<std::mutex> lck(mtx);
 	sites_queue.push(s);
+
+	empty = false;
+	cv.notify_one();
 
 }
 
@@ -39,6 +44,10 @@ std::string QueueSiteList::pop(){
 	while(sites_queue.empty()) cv.wait(lck);
 	std::string s = sites_queue.front();
 	sites_queue.pop();
+
+	if(sites_queue.empty()){
+		empty = true;
+	}
 
 	return s;
 

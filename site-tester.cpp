@@ -18,12 +18,14 @@
 #include <cstring>
 #include <curl/curl.h>
 #include <thread>
+#include <csignal>
 
 // GLOBAL VARIABLES AND STRUCTURES
 QueueSiteList  sites;
 QueueParseList raw_html;
 std::vector<std::string> searchVect;
 size_t runCount = 1;
+bool interrupt = false;
 
 // memory structure for libcurl
 struct MemoryStruct {
@@ -50,6 +52,8 @@ void parse_write_html();
 
 std::map<std::string, int> findTerms(std::string html);
 
+void signal_handler(int);
+
 int main(int argc, char *argv[]){
 
 	// check for proper number of arguments
@@ -69,7 +73,6 @@ int main(int argc, char *argv[]){
 
 	// initialize threads for consumers and producers
 
-	// Need to free memory at the end *****************************************
 	int fetches = config_file.get_num_fetch();
 	int parses  = config_file.get_num_parse();
 	std::thread *producers = new std::thread[fetches];
@@ -85,29 +88,50 @@ int main(int argc, char *argv[]){
 
 	// process the sites and search term files from the configuration object
 	process_search(config_file.get_search_file());
-	process_site(config_file.get_site_file());
 
-	while(!sites.is_empty()){
-		// create producer threads based on number specified in configuration file
-		for(int i = 0; i < config_file.get_num_fetch(); i++){
-			producers[i] = std::thread(fetch_html);
+	while(1){
+
+		void (*prev_handler)(int);
+		prev_handler = signal(SIGINT, signal_handler);
+
+		process_site(config_file.get_site_file());
+
+		while(!sites.is_empty()){
+
+			if(interrupt){
+				std::cout << "site-tester: exiting..." << std::endl;
+
+				delete [] producers;
+				delete [] consumers;
+
+				exit(0);
+			}
+
+			// create producer threads based on number specified in configuration file
+			for(int i = 0; i < config_file.get_num_fetch(); i++){
+				producers[i] = std::thread(fetch_html);
+			}
+
+			// create consumer threads based on number specified in configuration file
+			for(int i = 0; i < config_file.get_num_parse(); i++){
+				consumers[i] = std::thread(parse_write_html);
+			}
+
+			for(int i = 0; i < config_file.get_num_fetch(); i++){
+				producers[i].join();
+			}
+
+			for(int i = 0; i < config_file.get_num_parse(); i++){
+				consumers[i].join();
+			}
 		}
 
-		// create consumer threads based on number specified in configuration file
-		for(int i = 0; i < config_file.get_num_parse(); i++){
-			consumers[i] = std::thread(parse_write_html);
-		}
+		runCount++;
 
-		for(int i = 0; i < config_file.get_num_fetch(); i++){
-			producers[i].join();
-		}
+		// wait for next period to fetch
+		sleep(config_file.get_period_fetch());
 
-		for(int i = 0; i < config_file.get_num_parse(); i++){
-			consumers[i].join();
-		}
 	}
-
-	runCount++;
 
 	delete [] producers;
 	delete [] consumers;
@@ -296,5 +320,11 @@ void parse_write_html(){
 	}
 
 	myfile.close();
+
+}
+
+void signal_handler(int x){
+
+	interrupt = true;
 
 }
