@@ -43,6 +43,7 @@ void process_site(std::string);
 // function for getting raw html via libcurl
 static size_t WriteMemoryCallback(void *, size_t, size_t, void *);
 std::string getinmemory_main(std::string);
+std::string body_strip(std::string html);
 
 void usage();
 
@@ -249,6 +250,20 @@ std::string getinmemory_main( std::string url ){
 
 }
 
+std::string body_strip(std::string html){
+	//get start and end indeces of body content
+	size_t start = html.find("<body");
+	if(start == std::string::npos) return html;
+	size_t end = html.find("</body>");
+	if(end == std::string::npos) return html;
+	size_t length = end - start - 5;
+	//get substring between those values
+	std::string just_the_body = html.substr(start + 5, length);
+	std::cout << just_the_body << std::endl;
+	return just_the_body;
+
+}
+
 void usage(){
 	std::cout << "usage: ./site-tester <configuration file>" << std::endl;
 }
@@ -283,6 +298,8 @@ void fetch_html(){
 
 	std::string url = sites.pop();
 	std::string html = getinmemory_main(url);
+	//strip to body only
+	html = body_strip(html);
 
 	raw_html.push(url, html);
 
