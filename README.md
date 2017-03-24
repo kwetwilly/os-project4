@@ -1,4 +1,8 @@
 # os-project4
+
+Kyle Williams		(kwilli20)
+Thomas Franceschi	(tfrances)
+
 System for Verifying Web Placement
 
 Our main program, site-tester, takes in a conifg.txt file that contains parameters 

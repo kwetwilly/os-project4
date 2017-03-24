@@ -36,6 +36,7 @@ private:
 
 void QueueParseList::push(std::string url, std::string html){
 
+	// lock before push, unique_lock takes care of unlock
 	std::unique_lock<std::mutex> lck(mtx);
 
 	Pair pair;
@@ -44,6 +45,7 @@ void QueueParseList::push(std::string url, std::string html){
 
 	parse_queue.push(pair);
 
+	// update empty status and notify thread
 	empty = false;
 	cv.notify_one();
 
@@ -51,6 +53,7 @@ void QueueParseList::push(std::string url, std::string html){
 
 Pair QueueParseList::pop(){
 
+	// lock before pop and wait on queue if it's empty
 	std::unique_lock<std::mutex> lck(mtx);
 	while(empty) cv.wait(lck);
 

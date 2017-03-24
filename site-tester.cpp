@@ -21,9 +21,9 @@
 #include <cstring>
 
 // GLOBAL VARIABLES AND STRUCTURES ------------------------------------------
-QueueSiteList  sites;
-QueueParseList raw_html;
-std::vector<std::string> searchVect;
+QueueSiteList  sites_queue;
+QueueParseList parse_queue;
+std::vector<std::string> search_vect;
 size_t runCount = 1;
 bool interrupt = false;
 // memory structure for libcurl
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]){
 
 		std::cout << "Batch Number: " << runCount << std::endl;
 
-		while(!sites.is_empty()){
+		while(!sites_queue.is_empty()){
 
 			if(interrupt){
 				std::cout << "site-tester: exiting..." << std::endl;
@@ -154,7 +154,7 @@ void process_search(std::string filename){
 
 	while(!inputFile.eof()){
 		inputFile >> line;
-		searchVect.push_back(line);
+		search_vect.push_back(line);
 	}
 
 	inputFile.close();
@@ -170,7 +170,7 @@ void process_site(std::string filename){
 
 	while(!inputFile.eof()){
 		inputFile >> line;
-		sites.push(line);
+		sites_queue.push(line);
 	}
 
 	inputFile.close();
@@ -218,6 +218,7 @@ std::string getinmemory_main( std::string url ){
 	// set timeout in case site does not respond
 	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 1);
 
+	// make a thread safe
 	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
 
 	/* send all data to this function  */ 
@@ -283,20 +284,20 @@ std::string body_strip(std::string html){
 
 void fetch_html(){
 
-	std::string url = sites.pop();
+	std::string url = sites_queue.pop();
 	std::string html = getinmemory_main(url);
 
 	// strip to body only
 	html = body_strip(html);
 
-	raw_html.push(url, html);
+	parse_queue.push(url, html);
 
 }
 
 void parse_write_html(){
 
 	// pair of url and html
-	Pair pair = raw_html.pop();
+	Pair pair = parse_queue.pop();
 
 	// check if the html is not an empty string, if the html was empty, then the fetch to that url
 	//  timed out in the fetch_html() function, so we are not going to write this to the file, since
@@ -337,13 +338,13 @@ std::map<std::string, int> findTerms(std::string html){
 	
 	std::map<std::string, int> counts;
 
-	for ( size_t i = 0; i < searchVect.size(); i++){
+	for (size_t i = 0; i < search_vect.size(); i++){
 		size_t pos = 0;
 		size_t count = 0;
 
 		while(pos != std::string::npos){
 
-			pos = html.find(searchVect[i], pos);
+			pos = html.find(search_vect[i], pos);
 			if( pos != std::string::npos) {
 				count++;
 				pos++;
@@ -351,7 +352,7 @@ std::map<std::string, int> findTerms(std::string html){
 			else continue;
 		}
 
-		counts.insert({searchVect[i], count});
+		counts.insert({search_vect[i], count});
 
 	}
 

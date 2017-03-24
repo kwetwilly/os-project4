@@ -30,9 +30,11 @@ private:
 
 void QueueSiteList::push(std::string s){
 
+	// lock before push, unique_lock takes care of unlock
 	std::unique_lock<std::mutex> lck(mtx);
 	sites_queue.push(s);
 
+	// update empty status and notify thread
 	empty = false;
 	cv.notify_one();
 
@@ -40,6 +42,7 @@ void QueueSiteList::push(std::string s){
 
 std::string QueueSiteList::pop(){
 
+	// lock before pop and wait on queue if it's empty
 	std::unique_lock<std::mutex> lck(mtx);
 	while(sites_queue.empty()) cv.wait(lck);
 	std::string s = sites_queue.front();
