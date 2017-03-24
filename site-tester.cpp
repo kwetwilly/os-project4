@@ -89,8 +89,6 @@ int main(int argc, char *argv[]){
 	// process the search term files from the configuration object
 	process_search(config_file.get_search_file());
 
-	curl_global_init(CURL_GLOBAL_ALL);
-
 	while(1){
 
 		signal(SIGINT, signal_handler);
@@ -138,8 +136,6 @@ int main(int argc, char *argv[]){
 		sleep(config_file.get_period_fetch());
 
 	}
-
-	curl_global_cleanup();
 
 	delete [] producers;
 	delete [] consumers;
@@ -211,7 +207,7 @@ std::string getinmemory_main( std::string url ){
 	chunk.memory = (char*)malloc(1);  /* will be grown as needed by the realloc above */ 
 	chunk.size = 0;    /* no data at this point */ 
 
-	// curl_global_init(CURL_GLOBAL_ALL);
+	curl_global_init(CURL_GLOBAL_ALL);
 
 	/* init the curl session */ 
 	curl_handle = curl_easy_init();
@@ -221,6 +217,8 @@ std::string getinmemory_main( std::string url ){
 
 	// set timeout in case site does not respond
 	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 1);
+
+	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
 
 	/* send all data to this function  */ 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -260,7 +258,7 @@ std::string getinmemory_main( std::string url ){
 	free(chunk.memory);
 
 	/* we're done with libcurl, so clean it up */ 
-	// curl_global_cleanup();
+	curl_global_cleanup();
 
 	return 0;
 
