@@ -99,8 +99,8 @@ int main(int argc, char *argv[]){
 
 	while(1){
 
-		void (*prev_handler)(int);
-		prev_handler = signal(SIGINT, signal_handler);
+		// void (*prev_handler)(int);
+		signal(SIGINT, signal_handler);
 
 		process_site(config_file.get_site_file());
 
