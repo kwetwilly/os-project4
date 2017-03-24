@@ -114,19 +114,19 @@ int main(int argc, char *argv[]){
 				producers[i] = std::thread(fetch_html);
 			}
 
-			// create consumer threads based on number specified in configuration file
-			for(int i = 0; i < config_file.get_num_parse(); i++){
-				consumers[i] = std::thread(parse_write_html);
-			}
-
 			for(int i = 0; i < config_file.get_num_fetch(); i++){
 				producers[i].join();
 			}
 
-			for(int i = 0; i < config_file.get_num_parse(); i++){
-				consumers[i].join();
-			}
+		}
 
+		// create consumer threads based on number specified in configuration file
+		for(int i = 0; i < config_file.get_num_parse(); i++){
+			consumers[i] = std::thread(parse_write_html);
+		}
+
+		for(int i = 0; i < config_file.get_num_parse(); i++){
+			consumers[i].join();
 		}
 
 		std::cout << "-------------" << std::endl;
