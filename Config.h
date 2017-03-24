@@ -13,7 +13,7 @@
 #include <cstring> 		// strerror
 #include <cerrno> 		// errno
 #include <cstdlib>		// exit
-#include <sstream>
+#include <exception> 	// exception
 
 class Config{
 
@@ -64,43 +64,84 @@ Config::Config(std::string filename){
 		value = line.substr(delim_pos+1, line.length());
 
 		if(param == "PERIOD_FETCH"){
-			//period_fetch = std::stoi(value);
-			std::stringstream convert(value);
-			convert>>period_fetch;
+			try{
+				period_fetch = std::stoi(value);
+			}
+			// catch anything that cannot be converted to integer
+			catch(std::exception& e){
+				std::cout << "site-tester: PERIOD_FETCH Error: " << e.what() << " of " << value << " to integer" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+
+			// make sure period time is not negative
+			if(period_fetch < 0){
+				std::cout << "site-tester: PERIOD_FETCH Error: PERIOD_FETCH time must be positive integer" << std::endl;
+				exit(EXIT_FAILURE);
+			}
 		}
 		else if(param == "NUM_FETCH"){
-			//num_fetch = std::stoi(value);
-			std::stringstream convert(value);
-			convert>>num_fetch;
+			try{
+				num_fetch = std::stoi(value);
+			}
+			// catch anything that cannot be converted to integer
+			catch(std::exception& e){
+				std::cout << "site-tester: NUM_FETCH Error: " << e.what() << " of " << value << " to integer" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+
+			// check that fetch threads are within range
+			if(num_fetch < 1){
+				std::cout << "site-tester: NUM_FETCH Error: Not enough fetch threads in config file. MIN threads is 1" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+			if(num_fetch > 8){
+				std::cout << "site-tester: NUM_FETCH Error: Too many fetch threads in config file. MAX threads is 8" << std::endl;
+				exit(EXIT_FAILURE);
+			}
 		}
 		else if(param == "NUM_PARSE"){
-			//num_parse = std::stoi(value);
-			std::stringstream convert(value);
-			convert>>num_parse;
+			try{
+				num_parse = std::stoi(value);
+			}
+			// catch anything that cannot be converted to integer
+			catch(std::exception& e){
+				std::cout << "site-tester: NUM_PARSE Error: " << e.what() << " of " << value << " to integer" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+
+			// check that parse threads are within range
+			if(num_parse < 1){
+				std::cout << "site-tester: NUM_PARSE Error: Not enough parse threads in config file. MIN threads is 1" << std::endl;
+				exit(EXIT_FAILURE);
+			}
+			if(num_parse > 8){
+				std::cout << "site-tester: NUM_PARSE Error: Too many parse threads in config file. MAX threads is 8" << std::endl;
+				exit(EXIT_FAILURE);
+			}
 		}
 		else if(param == "SEARCH_FILE"){
 			search_file = value;
+
+			// check if search file exists
+			int search_result = access(search_file.c_str(), R_OK);
+			if(search_result < 0){
+				std::cout << "site-tester: Search File Error: " << value << ": " << strerror(errno) << std::endl;
+				exit(EXIT_FAILURE);
+			}
 		}
 		else if(param == "SITES_FILE"){
 			site_file = value;
+
+			// check if site file exists
+			int site_result = access(site_file.c_str(), R_OK);
+			if(site_result < 0){
+				std::cout << "site-tester: Site File Error: " << value << ": " << strerror(errno) << std::endl;
+				exit(EXIT_FAILURE);
+			}
 		} else{
 			std::cout << "site-tester: Warning. Unknown parameter found in configuration file." << std::endl;
 		}
 
-	}
-
-	// check if search file exists
-	int search_result = access(search_file.c_str(), R_OK);
-	if(search_result < 0){
-		std::cout << "site-tester: Search File Error: " << strerror(errno) << std::endl;
-		exit(EXIT_FAILURE);
-	}
-
-	// check if site file exists
-	int site_result = access(site_file.c_str(), R_OK);
-	if(site_result < 0){
-		std::cout << "site-tester: Site File Error: " << strerror(errno) << std::endl;
-		exit(EXIT_FAILURE);
 	}
 
 }

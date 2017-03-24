@@ -69,6 +69,13 @@ int main(int argc, char *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
+	// check if config file exists
+	int config_result = access(argv[1], R_OK);
+	if(config_result < 0){
+		std::cout << "site-tester: Config File Error: " << strerror(errno) << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
 	// create configuration class from file
 	Config config_file(argv[1]);
 
