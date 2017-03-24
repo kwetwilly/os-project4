@@ -259,7 +259,6 @@ std::string body_strip(std::string html){
 	size_t length = end - start - 5;
 	//get substring between those values
 	std::string just_the_body = html.substr(start + 5, length);
-	std::cout << just_the_body << std::endl;
 	return just_the_body;
 
 }
