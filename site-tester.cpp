@@ -5,108 +5,50 @@
 // Due: 3/24/17
 
 #include "Config.h"
+#include "QueueSiteList.h"
+#include "QueueParseList.h"
 #include <iostream>
 #include <fstream>
-#include <cstdlib>		// exit
-
+#include <cstdlib>
 #include <vector>
+#include <map>
 #include <string>
 #include <ctime>
 #include <cstdio>
 #include <cstring>
 #include <curl/curl.h>
+#include <thread>
 
-// function prototypes
-void process_search(std::vector<std::string> &, std::string);
-void process_site(std::vector<std::string> &, std::string);
+// GLOBAL VARIABLES AND STRUCTURES
+QueueSiteList  sites;
+QueueParseList raw_html;
+std::vector<std::string> searchVect;
+size_t runCount = 1;
+
+// memory structure for libcurl
+struct MemoryStruct {
+
+	char *memory;
+	size_t size;
+
+};
+
+// FUNCTION PROTOTYPES
+// site URLs/search term processing
+void process_search(std::string);
+void process_site(std::string);
+
+// function for getting raw html via libcurl
+static size_t WriteMemoryCallback(void *, size_t, size_t, void *);
+std::string getinmemory_main(std::string);
+
 void usage();
 
-std::vector<int> findTerms( std::string html, std::vector<std::string> searchVect);
+// functions for producer/consumer threads
+void fetch_html();
+void parse_write_html();
 
-
-struct MemoryStruct {
-  char *memory;
-  size_t size;
-};
- 
-static size_t
-WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp){
-  size_t realsize = size * nmemb;
-  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
- 
-  mem->memory = (char*)realloc(mem->memory, mem->size + realsize + 1);
-  if(mem->memory == NULL) {
-    /* out of memory! */ 
-    printf("not enough memory (realloc returned NULL)\n");
-    return 0;
-  }
- 
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
-  mem->size += realsize;
-  mem->memory[mem->size] = 0;
- 
-  return realsize;
-}
- 
-std::string getinmemory_main( std::string url )
-{
-  CURL *curl_handle;
-  CURLcode res;
- 
-  struct MemoryStruct chunk;
- 
-  chunk.memory = (char*)malloc(1);  /* will be grown as needed by the realloc above */ 
-  chunk.size = 0;    /* no data at this point */ 
- 
-  curl_global_init(CURL_GLOBAL_ALL);
- 
-  /* init the curl session */ 
-  curl_handle = curl_easy_init();
- 
-  /* specify URL to get */ 
-  curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
- 
-  /* send all data to this function  */ 
-  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
- 
-  /* we pass our 'chunk' struct to the callback function */ 
-  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
- 
-  /* some servers don't like requests that are made without a user-agent
-     field, so we provide one */ 
-  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
- 
-  /* get it! */ 
-  res = curl_easy_perform(curl_handle);
- 
-  /* check for errors */ 
-  if(res != CURLE_OK) {
-    fprintf(stderr, "curl_easy_perform() failed: %s\n",
-            curl_easy_strerror(res));
-  }
-  else {
-
-    //printf("%s\n", chunk.memory);
-	printf("URL: %s\n", url.c_str());
- 
-    printf("%lu bytes retrieved\n", (long)chunk.size);
-
-	std::string output = chunk.memory;
-	return output;
-
-  }
- 
-  /* cleanup curl stuff */ 
-  curl_easy_cleanup(curl_handle);
- 
-  free(chunk.memory);
- 
-  /* we're done with libcurl, so clean it up */ 
-  curl_global_cleanup();
- 
-  return 0;
-}
-
+std::map<std::string, int> findTerms(std::string html);
 
 int main(int argc, char *argv[]){
 
@@ -125,60 +67,56 @@ int main(int argc, char *argv[]){
 	// create configuration class from file
 	Config config_file(argv[1]);
 
-	
+	// initialize threads for consumers and producers
 
-	size_t runCount = 1;
-	while(1){
-		std::vector<std::string> searchVect;
-		std::vector<std::string> siteVect;
-		std::vector<int> currentCount;
-		std::vector<std::vector<int> > allCounts;
+	// Need to free memory at the end *****************************************
+	int fetches = config_file.get_num_fetch();
+	int parses  = config_file.get_num_parse();
+	std::thread *producers = new std::thread[fetches];
+	std::thread *consumers = new std::thread[parses];
 
-		// process the search and site files by populating vectors, respectively
-		process_search(searchVect, config_file.get_search_file());
-		process_site(siteVect, config_file.get_site_file());
+	// write headers to .csv output file
+	std::ofstream myfile;
+	// open file
+	myfile.open(std::to_string(runCount) + ".csv");
+	// set headers
+	myfile << "Time,Phrase,Site,Count\n";
+	myfile.close();
 
-		//Loop through all sites
-		for( size_t i = 0; i < siteVect.size(); i++){
-			//Get html
-			std::string html = getinmemory_main(siteVect[i]);
-			//std::cout << html << std::endl;
-			//Find key terms
-			currentCount = findTerms(html, searchVect);
-			allCounts.push_back(currentCount);
+	// process the sites and search term files from the configuration object
+	process_search(config_file.get_search_file());
+	process_site(config_file.get_site_file());
+
+	while(!sites.is_empty()){
+		// create producer threads based on number specified in configuration file
+		for(int i = 0; i < config_file.get_num_fetch(); i++){
+			producers[i] = std::thread(fetch_html);
 		}
-		//Save output to csv
-		std::ofstream myfile;
-		//Open file
-		myfile.open( std::to_string(runCount) + ".csv");
-		//Set headers
-		myfile << "Time,Phrase,Site,Count\n";
-		//Populate data
-		for( size_t i = 0; i < allCounts.size(); i++){
-			for( size_t j = 0; j < allCounts[i].size(); j++){
-				//Date
-				time_t timev;
-				time(&timev);
-				myfile << timev << ',';
-				//Phrase
-				myfile << searchVect[j] << ',';
 
-				//Site
-				myfile << siteVect[i] << ',';
-
-				//Count
-				myfile << allCounts[i][j] << '\n';
-			}
-			//myfile << '\n';
+		// create consumer threads based on number specified in configuration file
+		for(int i = 0; i < config_file.get_num_parse(); i++){
+			consumers[i] = std::thread(parse_write_html);
 		}
-		myfile.close();
-		runCount++;
-		std::cout << "runCount: " << runCount << std::endl;
-		sleep(10);
+
+		for(int i = 0; i < config_file.get_num_fetch(); i++){
+			producers[i].join();
+		}
+
+		for(int i = 0; i < config_file.get_num_parse(); i++){
+			consumers[i].join();
+		}
 	}
+
+	runCount++;
+
+	delete [] producers;
+	delete [] consumers;
+
+	exit(0);
+
 }
 
-void process_search(std::vector<std::string> &searchVect, std::string filename){
+void process_search(std::string filename){
 
 	// search file processing
 	std::ifstream inputFile;
@@ -194,7 +132,7 @@ void process_search(std::vector<std::string> &searchVect, std::string filename){
 
 }
 
-void process_site(std::vector<std::string> &siteVect, std::string filename){
+void process_site(std::string filename){
 
 	// site file processing
 	std::ifstream inputFile;
@@ -203,10 +141,87 @@ void process_site(std::vector<std::string> &siteVect, std::string filename){
 
 	while(!inputFile.eof()){
 		inputFile >> line;
-		siteVect.push_back(line);
+		sites.push(line);
 	}
 
 	inputFile.close();
+
+}
+
+static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp){
+
+	size_t realsize = size * nmemb;
+	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+	mem->memory = (char*)realloc(mem->memory, mem->size + realsize + 1);
+	if(mem->memory == NULL) {
+		/* out of memory! */ 
+		printf("not enough memory (realloc returned NULL)\n");
+		return 0;
+	}
+
+	memcpy(&(mem->memory[mem->size]), contents, realsize);
+	mem->size += realsize;
+	mem->memory[mem->size] = 0;
+
+	return realsize;
+
+}
+ 
+std::string getinmemory_main( std::string url ){
+
+	CURL *curl_handle;
+	CURLcode res;
+
+	struct MemoryStruct chunk;
+
+	chunk.memory = (char*)malloc(1);  /* will be grown as needed by the realloc above */ 
+	chunk.size = 0;    /* no data at this point */ 
+
+	curl_global_init(CURL_GLOBAL_ALL);
+
+	/* init the curl session */ 
+	curl_handle = curl_easy_init();
+
+	/* specify URL to get */ 
+	curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
+
+	/* send all data to this function  */ 
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+
+	/* we pass our 'chunk' struct to the callback function */ 
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+
+	/* some servers don't like requests that are made without a user-agent field, so we provide one */ 
+	curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+
+	/* get it! */ 
+	res = curl_easy_perform(curl_handle);
+
+	/* check for errors */ 
+	if(res != CURLE_OK) {
+		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+	}
+	else {
+
+		printf("URL: %s\n", url.c_str());
+
+		printf("%lu bytes retrieved\n", (long)chunk.size);
+
+		std::string output = chunk.memory;
+		return output;
+
+	}
+
+	/* cleanup curl stuff */ 
+	curl_easy_cleanup(curl_handle);
+
+	free(chunk.memory);
+
+	/* we're done with libcurl, so clean it up */ 
+	curl_global_cleanup();
+
+	return 0;
 
 }
 
@@ -214,17 +229,16 @@ void usage(){
 	std::cout << "usage: ./site-tester <configuration file>" << std::endl;
 }
 
-//Find shit
-std::vector<int> findTerms( std::string html, std::vector<std::string> searchVect){
+std::map<std::string, int> findTerms( std::string html){
 	
-	std::vector<int> counts;
+	std::map<std::string, int> counts;
 
 	for ( size_t i = 0; i < searchVect.size(); i++){
 		size_t pos = 0;
 		size_t count = 0;
-		//std::cout << "searching for number " << i << ": " << searchVect[i] << std::endl;
+
 		while(pos != std::string::npos){
-			//std::cout << "pos: " << pos << std::endl;
+
 			pos = html.find(searchVect[i], pos);
 			if( pos != std::string::npos) {
 				count++;
@@ -232,9 +246,55 @@ std::vector<int> findTerms( std::string html, std::vector<std::string> searchVec
 			}
 			else continue;
 		}
-		counts.push_back(count);
-		//std::cout << searchVect[i] << ": " << count << std::endl;
+
+		counts.insert({searchVect[i], count});
+
 	}
-	//std::cout << "size of counts: " << counts.size() << std::endl;
+
 	return counts;
+
+}
+
+void fetch_html(){
+
+	std::string url = sites.pop();
+	std::string html = getinmemory_main(url);
+
+	raw_html.push(url, html);
+
+}
+
+void parse_write_html(){
+
+	// pair of url and html
+	Pair pair = raw_html.pop();
+
+	// call the find/count function, returns mapping of words and counts for given html
+	std::map<std::string, int> map;
+	map = findTerms(pair.html);
+
+	// save output to csv
+	std::fstream myfile;
+	// open file in append mode
+	myfile.open(std::to_string(runCount) + ".csv", std::fstream::app);
+
+	// populate data
+	for(auto it = map.begin(); it != map.end(); ++it){
+		// date
+		time_t timev;
+		time(&timev);
+		myfile << timev << ',';
+
+		// phrase
+		myfile << it->first << ',';
+
+		// site
+		myfile << pair.url << ',';
+
+		// count
+		myfile << it->second << '\n';
+	}
+
+	myfile.close();
+
 }
