@@ -9,24 +9,23 @@
 #include "QueueParseList.h"
 #include <iostream>
 #include <fstream>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
+#include <csignal>
+#include <curl/curl.h>
+#include <thread>
 #include <vector>
 #include <map>
 #include <string>
-#include <ctime>
-#include <cstdio>
 #include <cstring>
-#include <curl/curl.h>
-#include <thread>
-#include <csignal>
 
-// GLOBAL VARIABLES AND STRUCTURES
+// GLOBAL VARIABLES AND STRUCTURES ------------------------------------------
 QueueSiteList  sites;
 QueueParseList raw_html;
 std::vector<std::string> searchVect;
 size_t runCount = 1;
 bool interrupt = false;
-
 // memory structure for libcurl
 struct MemoryStruct {
 
@@ -35,26 +34,19 @@ struct MemoryStruct {
 
 };
 
-// FUNCTION PROTOTYPES
-// site URLs/search term processing
+// FUNCTION PROTOTYPES ------------------------------------------------------
 void process_search(std::string);
 void process_site(std::string);
-
-// function for getting raw html via libcurl
 static size_t WriteMemoryCallback(void *, size_t, size_t, void *);
 std::string getinmemory_main(std::string);
 std::string body_strip(std::string html);
-
-void usage();
-
-// functions for producer/consumer threads
 void fetch_html();
 void parse_write_html();
-
 std::map<std::string, int> findTerms(std::string html);
-
 void signal_handler(int);
+void usage();
 
+// MAIN ---------------------------------------------------------------------
 int main(int argc, char *argv[]){
 
 	// check for proper number of arguments
@@ -94,15 +86,17 @@ int main(int argc, char *argv[]){
 	myfile << "Time,Phrase,Site,Count\n";
 	myfile.close();
 
-	// process the sites and search term files from the configuration object
+	// process the search term files from the configuration object
 	process_search(config_file.get_search_file());
 
 	while(1){
 
-		// void (*prev_handler)(int);
 		signal(SIGINT, signal_handler);
 
+		// populate the site queue from the configuration object param file
 		process_site(config_file.get_site_file());
+
+		std::cout << "Batch Number: " << runCount << std::endl;
 
 		while(!sites.is_empty()){
 
@@ -134,6 +128,8 @@ int main(int argc, char *argv[]){
 			}
 		}
 
+		std::cout << "-------------" << std::endl;
+
 		runCount++;
 
 		// wait for next period to fetch
@@ -148,6 +144,7 @@ int main(int argc, char *argv[]){
 
 }
 
+// FUNCTIONS ----------------------------------------------------------------
 void process_search(std::string filename){
 
 	// search file processing
@@ -218,6 +215,9 @@ std::string getinmemory_main( std::string url ){
 	/* specify URL to get */ 
 	curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
 
+	// set timeout in case site does not respond
+	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 1);
+
 	/* send all data to this function  */ 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 
@@ -230,8 +230,13 @@ std::string getinmemory_main( std::string url ){
 	/* get it! */ 
 	res = curl_easy_perform(curl_handle);
 
+	if(res == CURLE_OPERATION_TIMEDOUT){
+		std::cout << "site-tester: fetching timed out: " << url << std::endl;
+		return "";
+	}
+
 	/* check for errors */ 
-	if(res != CURLE_OK) {
+	if(res != CURLE_OK && res != CURLE_OPERATION_TIMEDOUT) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 	}
 	else {
@@ -258,23 +263,74 @@ std::string getinmemory_main( std::string url ){
 }
 
 std::string body_strip(std::string html){
-	//get start and end indeces of body content
+
+	// get start and end indices of body content
 	size_t start = html.find("<body");
 	if(start == std::string::npos) return html;
 	size_t end = html.find("</body>");
 	if(end == std::string::npos) return html;
 	size_t length = end - start - 5;
-	//get substring between those values
+
+	// get substring between those values
 	std::string just_the_body = html.substr(start + 5, length);
+
 	return just_the_body;
 
 }
 
-void usage(){
-	std::cout << "usage: ./site-tester <configuration file>" << std::endl;
+void fetch_html(){
+
+	std::string url = sites.pop();
+	std::string html = getinmemory_main(url);
+
+	// strip to body only
+	html = body_strip(html);
+
+	raw_html.push(url, html);
+
 }
 
-std::map<std::string, int> findTerms( std::string html){
+void parse_write_html(){
+
+	// pair of url and html
+	Pair pair = raw_html.pop();
+
+	// check if the html is not an empty string, if the html was empty, then the fetch to that url
+	//  timed out in the fetch_html() function, so we are not going to write this to the file, since
+	//  there is not data
+	if(pair.html != ""){
+		// call the find/count function, returns mapping of words and counts for given html
+		std::map<std::string, int> map;
+		map = findTerms(pair.html);
+
+		// save output to csv
+		std::fstream myfile;
+		// open file in append mode
+		myfile.open(std::to_string(runCount) + ".csv", std::fstream::app);
+
+		// populate data
+		for(auto it = map.begin(); it != map.end(); ++it){
+			// date
+			time_t timev;
+			time(&timev);
+			myfile << timev << ',';
+
+			// phrase
+			myfile << it->first << ',';
+
+			// site
+			myfile << pair.url << ',';
+
+			// count
+			myfile << it->second << '\n';
+		}
+
+		myfile.close();
+	}
+
+}
+
+std::map<std::string, int> findTerms(std::string html){
 	
 	std::map<std::string, int> counts;
 
@@ -300,54 +356,14 @@ std::map<std::string, int> findTerms( std::string html){
 
 }
 
-void fetch_html(){
-
-	std::string url = sites.pop();
-	std::string html = getinmemory_main(url);
-	//strip to body only
-	html = body_strip(html);
-
-	raw_html.push(url, html);
-
-}
-
-void parse_write_html(){
-
-	// pair of url and html
-	Pair pair = raw_html.pop();
-
-	// call the find/count function, returns mapping of words and counts for given html
-	std::map<std::string, int> map;
-	map = findTerms(pair.html);
-
-	// save output to csv
-	std::fstream myfile;
-	// open file in append mode
-	myfile.open(std::to_string(runCount) + ".csv", std::fstream::app);
-
-	// populate data
-	for(auto it = map.begin(); it != map.end(); ++it){
-		// date
-		time_t timev;
-		time(&timev);
-		myfile << timev << ',';
-
-		// phrase
-		myfile << it->first << ',';
-
-		// site
-		myfile << pair.url << ',';
-
-		// count
-		myfile << it->second << '\n';
-	}
-
-	myfile.close();
-
-}
-
 void signal_handler(int x){
 
 	interrupt = true;
+
+}
+
+void usage(){
+
+	std::cout << "usage: ./site-tester <configuration file>" << std::endl;
 
 }
