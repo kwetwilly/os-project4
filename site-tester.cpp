@@ -240,6 +240,7 @@ std::string getinmemory_main( std::string url ){
 	/* check for errors */ 
 	if(res != CURLE_OK && res != CURLE_OPERATION_TIMEDOUT) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		return "";
 	}
 	else {
 
