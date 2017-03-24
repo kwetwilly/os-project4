@@ -222,7 +222,7 @@ std::string getinmemory_main( std::string url ){
 	curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
 
 	// set timeout in case site does not respond
-	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 1);
+	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 10);
 
 	// make a thread safe
 	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
