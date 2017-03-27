@@ -1,0 +1,7 @@
+Thomas Franceschi
+Kyle Williams
+
+After we use curl to get the full html of the web page, we pass it into a 
+function that uses the string.find() function to find the start and end tags 
+for the body of the html then uses the string.substr() function to return 
+just the string between those two tags, which contains only the visible text.
