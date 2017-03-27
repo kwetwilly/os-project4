@@ -115,6 +115,9 @@ int main(int argc, char *argv[]){
 	// set handler for a ctrl-c
 	signal(SIGINT, signal_handler);
 
+	// initialize libcurl
+	curl_global_init(CURL_GLOBAL_ALL);
+
 	// create producer threads based on number specified in configuration file
 	for(int i = 0; i < NUM_FETCH; i++){
 		producers[i] = std::thread(fetch_html);
@@ -204,8 +207,6 @@ std::string getinmemory_main( std::string url ){
 
 	chunk.memory = (char*)malloc(1);  /* will be grown as needed by the realloc above */ 
 	chunk.size = 0;    /* no data at this point */ 
-
-	curl_global_init(CURL_GLOBAL_ALL);
 
 	/* init the curl session */ 
 	curl_handle = curl_easy_init();
