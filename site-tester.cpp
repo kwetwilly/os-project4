@@ -20,6 +20,7 @@
 #include <map>
 #include <string>
 #include <cstring>
+#include <chrono>
 
 // GLOBAL VARIABLES AND STRUCTURES ------------------------------------------
 QueueSiteList  			 sites_queue;
@@ -312,9 +313,14 @@ void parse_write_html(){
 			// populate data
 			for(auto it = map.begin(); it != map.end(); ++it){
 				// date
-				time_t timev;
-				time(&timev);
-				myfile << timev << ',';
+				time_t timev = time(0);
+
+				//convert from epoch
+				char* dateTime = ctime(&timev);
+				std::string date = dateTime;
+				date.back() = ' ';
+
+				myfile << date << ',';
 
 				// phrase
 				myfile << it->first << ',';
