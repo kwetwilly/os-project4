@@ -316,7 +316,7 @@ void parse_write_html(){
 				// date
 				time_t timev = time(0);
 
-				//convert from epoch
+				// convert from epoch
 				char* dateTime = ctime(&timev);
 				std::string date = dateTime;
 				date.back() = ' ';
