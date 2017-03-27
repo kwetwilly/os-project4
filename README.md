@@ -32,3 +32,9 @@ classes, respectively.
 If the fetching for a particular website times out after 10s, an empty string is returned
 in place of that site's raw html.  Data for that site is not written to the .csv file, but other sites
 will be fetched and parsed and written if valid.
+
+One can quit the program by hitting ctrl-C.  The corresponding signal handler sets the global
+KEEP_RUNNING to 0.  The sites queue and the parse queue are filled with empty strings so any sleeping threads
+can finished up. Then back in main, memory for the fetch and parse threads is deallocated, and the program
+exits with 0.  If ctrl-c is hit in the middle of a batch, the program will exit right away, and the
+remaining sites to be fetched and parsed will not be written to the .csv.
