@@ -19,6 +19,7 @@
 #include <map>
 #include <string>
 #include <cstring>
+#include <mutex>
 
 // GLOBAL VARIABLES AND STRUCTURES ------------------------------------------
 QueueSiteList  sites_queue;
@@ -28,7 +29,13 @@ std::string sites_file;
 size_t runCount = 1;
 bool interrupt = false;
 
-keepRunning = 1;
+std::mutex mtx;
+
+int keepRunning = 1;
+int numSites = 0;
+int siteCount = 0;
+int period_fetch = 0;
+bool alarm_set = true;
 
 // memory structure for libcurl
 struct MemoryStruct {
@@ -93,70 +100,85 @@ int main(int argc, char *argv[]){
 	// process the search term files from the configuration object
 	process_search(config_file.get_search_file());
 	sites_file = config_file.get_site_file();
+	// populate the site queue from the configuration object param file
+	process_site(sites_file);
+	period_fetch = config_file.get_period_fetch();
 
-	while(1){
+	// while(1){
 
-		std::cout << "Batch Number: " << runCount << std::endl;
-		signal(SIGINT, signal_handler);
-		// signal(SIGALRM, alarm_handler);
-		// alarm(config_file.get_period_fetch());
+	std::cout << "Batch Number: " << runCount << std::endl;
+	// 	signal(SIGINT, signal_handler);
+	// if(siteCount == numSites){
+	// 	numSites = 0;
+	// 	siteCount = 0;
+	// 	signal(SIGALRM, alarm_handler);
+	// 	std::cout << "Alarm set" << std::endl;
+	// 	alarm(config_file.get_period_fetch());
+	// }
 
-		// populate the site queue from the configuration object param file
-		process_site(sites_file);
+	// 	// populate the site queue from the configuration object param file
+	// 	process_site(sites_file);
 
-		// std::cout << "Batch Number: " << runCount << std::endl;
+	// 	// std::cout << "Batch Number: " << runCount << std::endl;
 
-		while(!sites_queue.is_empty()){
+	// 	while(!sites_queue.is_empty()){
 
-			if(interrupt){
-				std::cout << "site-tester: exiting..." << std::endl;
+	// 		if(interrupt){
+	// 			std::cout << "site-tester: exiting..." << std::endl;
 
-				delete [] producers;
-				delete [] consumers;
+	// 			delete [] producers;
+	// 			delete [] consumers;
 
-				exit(0);
-			}
+	// 			exit(0);
+	// 		}
 
 			// create producer threads based on number specified in configuration file
 			for(int i = 0; i < config_file.get_num_fetch(); i++){
 				producers[i] = std::thread(fetch_html);
 			}
 
-			for(int i = 0; i < config_file.get_num_fetch(); i++){
-				producers[i].join();
-			}
+	// 		for(int i = 0; i < config_file.get_num_fetch(); i++){
+	// 			producers[i].join();
+	// 		}
 
-		}
+	// 	}
 
-		while(!parse_queue.is_empty()){
+	// 	while(!parse_queue.is_empty()){
 
-			if(interrupt){
-				std::cout << "site-tester: exiting..." << std::endl;
+	// 		if(interrupt){
+	// 			std::cout << "site-tester: exiting..." << std::endl;
 
-				delete [] producers;
-				delete [] consumers;
+	// 			delete [] producers;
+	// 			delete [] consumers;
 
-				exit(0);
-			}
+	// 			exit(0);
+	// 		}
 
 			// create consumer threads based on number specified in configuration file
 			for(int i = 0; i < config_file.get_num_parse(); i++){
 				consumers[i] = std::thread(parse_write_html);
 			}
 
-			for(int i = 0; i < config_file.get_num_parse(); i++){
-				consumers[i].join();
-			}
+	// 		for(int i = 0; i < config_file.get_num_parse(); i++){
+	// 			consumers[i].join();
+	// 		}
 
-		}
+	// 	}
 
-		std::cout << "-------------" << std::endl;
+	// 	std::cout << "-------------" << std::endl;
 
-		runCount++;
+	// 	runCount++;
 
-		// wait for next period to fetch
-		sleep(config_file.get_period_fetch());
+	// 	// wait for next period to fetch
+	// 	sleep(config_file.get_period_fetch());
 
+	// }
+
+	for(int i = 0; i < config_file.get_num_fetch(); i++){
+		producers[i].join();
+	}
+	for(int i = 0; i < config_file.get_num_parse(); i++){
+		consumers[i].join();
 	}
 
 	delete [] producers;
@@ -309,52 +331,86 @@ std::string body_strip(std::string html){
 
 void fetch_html(){
 
-	std::string url = sites_queue.pop();
-	std::string html = getinmemory_main(url);
+	while(keepRunning){
+		std::string url = sites_queue.pop();
+		std::string html = getinmemory_main(url);
 
-	// strip to body only
-	html = body_strip(html);
+		if(html != ""){
+			numSites++;
+		}
 
-	parse_queue.push(url, html);
+		// strip to body only
+		html = body_strip(html);
+
+		parse_queue.push(url, html);
+	}
 
 }
 
 void parse_write_html(){
 
-	// pair of url and html
-	Pair pair = parse_queue.pop();
+	while(keepRunning){
+		// pair of url and html
+		Pair pair = parse_queue.pop();
 
-	// check if the html is not an empty string, if the html was empty, then the fetch to that url
-	//  timed out in the fetch_html() function, so we are not going to write this to the file, since
-	//  there is not data
-	if(pair.html != ""){
-		// call the find/count function, returns mapping of words and counts for given html
-		std::map<std::string, int> map;
-		map = findTerms(pair.html);
+		// check if the html is not an empty string, if the html was empty, then the fetch to that url
+		//  timed out in the fetch_html() function, so we are not going to write this to the file, since
+		//  there is not data
+		if(pair.html != ""){
+			// call the find/count function, returns mapping of words and counts for given html
+			std::map<std::string, int> map;
+			map = findTerms(pair.html);
 
-		// save output to csv
-		std::fstream myfile;
-		// open file in append mode
-		myfile.open(std::to_string(runCount) + ".csv", std::fstream::app);
+			mtx.lock();
 
-		// populate data
-		for(auto it = map.begin(); it != map.end(); ++it){
-			// date
-			time_t timev;
-			time(&timev);
-			myfile << timev << ',';
+			if(siteCount == 0){
+				// write headers to .csv output file
+				std::ofstream myfile;
+				// open file
+				myfile.open(std::to_string(runCount) + ".csv");
+				// set headers
+				myfile << "Time,Phrase,Site,Count\n";
+				myfile.close();
+			}
 
-			// phrase
-			myfile << it->first << ',';
+			// save output to csv
+			std::fstream myfile;
+			// open file in append mode
+			myfile.open(std::to_string(runCount) + ".csv", std::fstream::app);
 
-			// site
-			myfile << pair.url << ',';
+			// populate data
+			for(auto it = map.begin(); it != map.end(); ++it){
+				// date
+				time_t timev;
+				time(&timev);
+				myfile << timev << ',';
 
-			// count
-			myfile << it->second << '\n';
+				// phrase
+				myfile << it->first << ',';
+
+				// site
+				myfile << pair.url << ',';
+
+				// count
+				myfile << it->second << '\n';
+			}
+
+			myfile.close();
+
+			siteCount++;
+
+			mtx.unlock();
 		}
 
-		myfile.close();
+		if((siteCount == numSites) && alarm_set){
+			numSites = 0;
+			siteCount = 0;
+			alarm_set = false;
+			signal(SIGALRM, alarm_handler);
+			std::cout << "Alarm set" << std::endl;
+			alarm(period_fetch);
+		}
+
 	}
 
 }
@@ -390,6 +446,7 @@ void alarm_handler(int x){
 	std::cout << "-------------" << std::endl;
 	runCount++;
 	std::cout << "Batch Number: " << runCount << std::endl;
+	alarm_set = true;
 	// populate the site queue from the configuration object param file
 	process_site(sites_file);
 

@@ -36,7 +36,7 @@ void QueueSiteList::push(std::string s){
 
 	// update empty status and notify thread
 	empty = false;
-	cv.notify_one();
+	cv.notify_all();
 
 }
 
@@ -45,7 +45,7 @@ std::string QueueSiteList::pop(){
 	if(!sites_queue.empty()){
 		// lock before pop and wait on queue if it's empty
 		std::unique_lock<std::mutex> lck(mtx);
-		// while(sites_queue.empty()) cv.wait(lck);
+		while(sites_queue.empty()) cv.wait(lck);
 		std::string s = sites_queue.front();
 		sites_queue.pop();
 
