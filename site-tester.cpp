@@ -396,7 +396,12 @@ void signal_handler(int x){
 	std::cout << "site-tester: Exiting..." << std::endl;
 	KEEP_RUNNING = 0;
 
-	exit(0);
+	for( int i = 0; i < NUM_FETCH; i++){
+		sites_queue.push("");
+	}
+	for( int i = 0; i < NUM_PARSE; i++){
+		parse_queue.push("","");
+	}
 
 }
 
