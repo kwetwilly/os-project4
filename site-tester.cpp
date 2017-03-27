@@ -53,7 +53,6 @@ void process_search(std::string);
 void process_site(std::string);
 static size_t WriteMemoryCallback(void *, size_t, size_t, void *);
 std::string getinmemory_main(std::string);
-std::string body_strip(std::string html);
 void fetch_html();
 void parse_write_html();
 std::map<std::string, int> findTerms(std::string html);
@@ -264,22 +263,6 @@ std::string getinmemory_main( std::string url ){
 
 }
 
-std::string body_strip(std::string html){
-
-	// get start and end indices of body content
-	size_t start = html.find("<body");
-	if(start == std::string::npos) return html;
-	size_t end = html.find("</body>");
-	if(end == std::string::npos) return html;
-	size_t length = end - start - 5;
-
-	// get substring between those values
-	std::string just_the_body = html.substr(start + 5, length);
-
-	return just_the_body;
-
-}
-
 void fetch_html(){
 
 	while(KEEP_RUNNING){
@@ -289,9 +272,6 @@ void fetch_html(){
 		if(html != ""){
 			SITES_FETCHED++;
 		}
-
-		// strip to body only
-		html = body_strip(html);
 
 		parse_queue.push(url, html);
 	}
