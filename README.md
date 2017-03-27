@@ -9,14 +9,14 @@ Our main program, site-tester, takes in a conifg.txt file that contains paramete
 for the wait between fetches, the number of threads to fetch html and parse html, as 
 well as filenames for text files that contain the URLs to fetch and keywords to search
 for in those websites. It parses this config file, then loads the URLs into a queue 
-and the search terms intoa vector. We then intitialize the consumer and producer threads 
-according to the specified numbersin the config file. The CSV output file for the current 
-run is then created and headers are appended to the top line. The program then goes into 
-a while(1) loop with interrupt handling and as long as the queue of URLs is not empty, a 
-producers thread pops it from the queue and fetches the html and puts it in a dict with 
-they key being the URL and the value being the html body and puts it in another queue. 
-The consumer threads then pop from that queue and search the html body for the given 
-keywords, returning a map of the URL to a vector of ints containing the occurences of 
-each search term in the html. The threads are all then joined and the run counter is 
-incremented and the program sleeps for the specified amount of time before waking up and 
-repeating everything.
+and the search terms into a vector. We then intitialize the fetch_html and parse_html 
+threads according to the specified numbers in the config file. The fetch threads then 
+run in a while loop and while the site queue is not empty, it pops a site off and fetches 
+the html using curl then places that html body into a queue to be parsed. If there are no 
+sites in the queue the threads go to sleep. Whenever we place html in the parse queue we 
+send a signal to wake up a parse thread to process the data. The parse threads search the 
+html text for the given keywords and populate a  map where the key is the term and the 
+value is the number of occurences. The map is then used to write to the output csv file 
+for the given batch number. If there are no entries in the html queue the parse threads 
+go to sleep. If the number of websites parsed equals the number of total websites read in, 
+then an alarm is set to restart the whole process.
