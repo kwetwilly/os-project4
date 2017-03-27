@@ -28,3 +28,7 @@ data for that url is not written to the .csv.
 
 The sites queues and the parse queue are wrapped in the QueueSiteList and QueueParseList
 classes, respectively.
+
+If the fetching for a particular website times out after 10s, an empty string is returned
+in place of that site's raw html.  Data for that site is not written to the .csv file, but other sites
+will be fetched and parsed and written if valid.
