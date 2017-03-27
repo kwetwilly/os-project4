@@ -396,6 +396,8 @@ void signal_handler(int x){
 	std::cout << "site-tester: Exiting..." << std::endl;
 	KEEP_RUNNING = 0;
 
+	exit(0);
+
 }
 
 void usage(){
