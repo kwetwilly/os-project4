@@ -24,8 +24,12 @@
 QueueSiteList  sites_queue;
 QueueParseList parse_queue;
 std::vector<std::string> search_vect;
+std::string sites_file;
 size_t runCount = 1;
 bool interrupt = false;
+
+keepRunning = 1;
+
 // memory structure for libcurl
 struct MemoryStruct {
 
@@ -43,6 +47,7 @@ std::string body_strip(std::string html);
 void fetch_html();
 void parse_write_html();
 std::map<std::string, int> findTerms(std::string html);
+void alarm_handler(int);
 void signal_handler(int);
 void usage();
 
@@ -72,7 +77,6 @@ int main(int argc, char *argv[]){
 	Config config_file(argv[1]);
 
 	// initialize threads for consumers and producers
-
 	int fetches = config_file.get_num_fetch();
 	int parses  = config_file.get_num_parse();
 	std::thread *producers = new std::thread[fetches];
@@ -88,15 +92,19 @@ int main(int argc, char *argv[]){
 
 	// process the search term files from the configuration object
 	process_search(config_file.get_search_file());
+	sites_file = config_file.get_site_file();
 
 	while(1){
 
+		std::cout << "Batch Number: " << runCount << std::endl;
 		signal(SIGINT, signal_handler);
+		// signal(SIGALRM, alarm_handler);
+		// alarm(config_file.get_period_fetch());
 
 		// populate the site queue from the configuration object param file
-		process_site(config_file.get_site_file());
+		process_site(sites_file);
 
-		std::cout << "Batch Number: " << runCount << std::endl;
+		// std::cout << "Batch Number: " << runCount << std::endl;
 
 		while(!sites_queue.is_empty()){
 
@@ -120,13 +128,26 @@ int main(int argc, char *argv[]){
 
 		}
 
-		// create consumer threads based on number specified in configuration file
-		for(int i = 0; i < config_file.get_num_parse(); i++){
-			consumers[i] = std::thread(parse_write_html);
-		}
+		while(!parse_queue.is_empty()){
 
-		for(int i = 0; i < config_file.get_num_parse(); i++){
-			consumers[i].join();
+			if(interrupt){
+				std::cout << "site-tester: exiting..." << std::endl;
+
+				delete [] producers;
+				delete [] consumers;
+
+				exit(0);
+			}
+
+			// create consumer threads based on number specified in configuration file
+			for(int i = 0; i < config_file.get_num_parse(); i++){
+				consumers[i] = std::thread(parse_write_html);
+			}
+
+			for(int i = 0; i < config_file.get_num_parse(); i++){
+				consumers[i].join();
+			}
+
 		}
 
 		std::cout << "-------------" << std::endl;
@@ -153,8 +174,7 @@ void process_search(std::string filename){
 	inputFile.open(filename.c_str());
 	std::string line;
 
-	while(!inputFile.eof()){
-		inputFile >> line;
+	while(getline(inputFile, line)){
 		search_vect.push_back(line);
 	}
 
@@ -169,8 +189,7 @@ void process_site(std::string filename){
 	inputFile.open(filename.c_str());
 	std::string line;
 
-	while(!inputFile.eof()){
-		inputFile >> line;
+	while(getline(inputFile, line)){
 		sites_queue.push(line);
 	}
 
@@ -363,6 +382,16 @@ std::map<std::string, int> findTerms(std::string html){
 	}
 
 	return counts;
+
+}
+
+void alarm_handler(int x){
+
+	std::cout << "-------------" << std::endl;
+	runCount++;
+	std::cout << "Batch Number: " << runCount << std::endl;
+	// populate the site queue from the configuration object param file
+	process_site(sites_file);
 
 }
 

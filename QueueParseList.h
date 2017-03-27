@@ -24,6 +24,7 @@ public:
 
 	void push(std::string, std::string);
 	Pair pop();
+	int is_empty() {return parse_queue.empty();}
 
 private:
 	std::queue<Pair> parse_queue;
